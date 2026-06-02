@@ -1,0 +1,115 @@
+{
+  "name": "trae-harvester",
+  "displayName": "Trae Harvester (Trae 自动化收割机)",
+  "description": "一键收割代码资产、测试状态和 AI 思考上下文，输出结构化 JSON 供下游 AI 打分评估",
+  "version": "0.3.0-beta",
+  "publisher": "trae-harvester",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "trae-harvester.exportPatch",
+        "title": "Export Git Patch (导出分支 Patch)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.inputTestSteps",
+        "title": "Input Test Steps JSON (输入测试步骤)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.runAllTests",
+        "title": "Run All Tests (一键全自动执行测试)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.runSingleStep",
+        "title": "Run Single Test Step (单步执行测试)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.harvestAll",
+        "title": "Harvest All (一键收割全部产物)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.runDiagnostics",
+        "title": "Run Diagnostics (运行环境诊断)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.showLogs",
+        "title": "Show Logs (显示运行日志)",
+        "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.exportLogs",
+        "title": "Export Logs (一键导出运行日志)",
+        "category": "Trae Harvester"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "trae-harvester-sidebar",
+          "title": "Trae Harvester",
+          "icon": "$(beaker)"
+        }
+      ]
+    },
+    "views": {
+      "trae-harvester-sidebar": [
+        {
+          "id": "trae-harvester.testPanel",
+          "name": "Test Steps",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Trae Harvester",
+      "properties": {
+        "traeHarvester.outputPath": {
+          "type": "string",
+          "default": "/gitdiff_shared",
+          "description": "产物输出的绝对路径 (Absolute path for output artifacts)"
+        },
+        "traeHarvester.commandTimeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "命令执行超时时间(毫秒), 默认5分钟"
+        },
+        "traeHarvester.mcpPort": {
+          "type": "number",
+          "default": 3000,
+          "description": "MCP Server 监听的本地端口 (默认 3000)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^5.2.1"
+  }
+}

@@ -1,0 +1,253 @@
+// ============================================================
+// Trae Harvester — 功能一：一键导出 Git Patch
+// ============================================================
+// 数据流：获取分支名 → git add/commit/push → git diff main...HEAD → 写入 .patch
+// 容错：工作区干净时跳过 commit/push，命令失败时继续生成 patch
+
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { execCommand } from '../utils/shell';
+import { atomicWrite, ensureDir } from '../utils/fileUtils';
+import { getLogger } from '../utils/logger';
+
+/** Git 操作的每步日志 */
+interface GitStepLog {
+    step: string;
+    command: string;
+    success: boolean;
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    skipped?: boolean;
+    skipReason?: string;
+}
+
+/**
+ * 执行 Git Patch 导出的完整流程。
+ * 
+ * @param outputDir  产物输出目录的绝对路径
+ * @returns          生成的 .patch 文件路径
+ */
+export async function exportGitPatch(outputDir: string): Promise<string> {
+    const log = getLogger();
+    log.separator('功能一：Git Patch 导出');
+    log.timerStart('exportPatch');
+
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceFolder) {
+        log.error('GitPatch', '没有打开的工作区，无法执行 Git 操作');
+        throw new Error('没有打开的工作区，无法执行 Git 操作');
+    }
+
+    log.info('GitPatch', `工作区目录: ${workspaceFolder}`);
+
+    const logs: GitStepLog[] = [];
+    const execOpts = { cwd: workspaceFolder };
+
+    // ---- Step 1: 获取当前分支名 ----
+    const branchResult = await execCommand('git rev-parse --abbrev-ref HEAD', execOpts);
+    if (branchResult.exitCode !== 0 || !branchResult.stdout.trim()) {
+        throw new Error(`无法获取当前分支名: ${branchResult.stderr}`);
+    }
+    const currentBranch = branchResult.stdout.trim();
+    log.info('GitPatch', `当前分支: ${currentBranch}`);
+    logs.push({
+        step: '获取分支名',
+        command: 'git rev-parse --abbrev-ref HEAD',
+        success: true,
+        stdout: branchResult.stdout,
+        stderr: branchResult.stderr,
+        exitCode: branchResult.exitCode,
+    });
+
+    vscode.window.showInformationMessage(`📌 当前分支: ${currentBranch}`);
+
+    // ---- Step 2: 检查工作区状态 ----
+    const statusResult = await execCommand('git status --porcelain', execOpts);
+    const isClean = statusResult.stdout.trim() === '';
+    log.info('GitPatch', `工作区状态: ${isClean ? '干净 (无变动)' : '有未提交的变更'}`);
+    logs.push({
+        step: '检查工作区状态',
+        command: 'git status --porcelain',
+        success: statusResult.exitCode === 0,
+        stdout: statusResult.stdout,
+        stderr: statusResult.stderr,
+        exitCode: statusResult.exitCode,
+    });
+
+    if (isClean) {
+        vscode.window.showInformationMessage('📂 工作区干净，跳过 commit/push');
+        
+        // 添加跳过日志
+        for (const step of ['git add .', 'git commit', 'git push']) {
+            logs.push({
+                step: `跳过: ${step}`,
+                command: step,
+                success: true,
+                stdout: '',
+                stderr: '',
+                exitCode: null,
+                skipped: true,
+                skipReason: '工作区无变动',
+            });
+        }
+    } else {
+        // ---- Step 3: git add . ----
+        log.subSeparator('git add .');
+        const addResult = await execCommand('git add .', execOpts);
+        log.detail('exitCode', String(addResult.exitCode));
+        if (addResult.stderr) { log.detail('stderr', addResult.stderr.trim()); }
+        logs.push({
+            step: 'git add .',
+            command: 'git add .',
+            success: addResult.exitCode === 0,
+            stdout: addResult.stdout,
+            stderr: addResult.stderr,
+            exitCode: addResult.exitCode,
+        });
+
+        if (addResult.exitCode !== 0) {
+            vscode.window.showWarningMessage(`⚠️ git add 失败: ${addResult.stderr}`);
+        }
+
+        // ---- Step 4: git commit ----
+        const commitMsg = `merge origin ${currentBranch}`;
+        log.subSeparator(`git commit -m "${commitMsg}"`);
+        const commitResult = await execCommand(
+            `git commit -m "${commitMsg}"`,
+            execOpts
+        );
+        logs.push({
+            step: 'git commit',
+            command: `git commit -m "${commitMsg}"`,
+            success: commitResult.exitCode === 0,
+            stdout: commitResult.stdout,
+            stderr: commitResult.stderr,
+            exitCode: commitResult.exitCode,
+        });
+
+        log.detail('exitCode', String(commitResult.exitCode));
+        if (commitResult.stdout) { log.detail('stdout', commitResult.stdout.trim()); }
+        if (commitResult.stderr) { log.detail('stderr', commitResult.stderr.trim()); }
+        if (commitResult.exitCode !== 0) {
+            // commit 失败（如 nothing to commit）不中断
+            vscode.window.showWarningMessage(
+                `⚠️ git commit 非零退出 (code=${commitResult.exitCode}): ${commitResult.stderr || commitResult.stdout}`
+            );
+        }
+
+        // ---- Step 5: git push ----
+        log.subSeparator(`git push origin ${currentBranch}`);
+        const pushResult = await execCommand(
+            `git push origin ${currentBranch}`,
+            execOpts
+        );
+        logs.push({
+            step: 'git push',
+            command: `git push origin ${currentBranch}`,
+            success: pushResult.exitCode === 0,
+            stdout: pushResult.stdout,
+            stderr: pushResult.stderr,
+            exitCode: pushResult.exitCode,
+        });
+
+        log.detail('exitCode', String(pushResult.exitCode));
+        if (pushResult.stderr) { log.detail('stderr', pushResult.stderr.trim()); }
+        if (pushResult.exitCode !== 0) {
+            // push 失败记录警告但继续生成 patch
+            vscode.window.showWarningMessage(
+                `⚠️ git push 失败 (code=${pushResult.exitCode}): ${pushResult.stderr}`
+            );
+        }
+    }
+
+    // ---- Step 6: 生成 diff patch ----
+    const diffResult = await execCommand('git diff main...HEAD', execOpts);
+    logs.push({
+        step: '生成 diff patch',
+        command: 'git diff main...HEAD',
+        success: diffResult.exitCode === 0,
+        stdout: `(${diffResult.stdout.length} bytes)`,
+        stderr: diffResult.stderr,
+        exitCode: diffResult.exitCode,
+    });
+
+    // ---- Step 7: 写入 patch 文件 ----
+    await ensureDir(outputDir);
+    const patchFileName = `${currentBranch}.patch`;
+    const patchFilePath = path.join(outputDir, patchFileName);
+
+    let patchContent: string;
+    if (diffResult.exitCode !== 0) {
+        // diff 命令失败时写入说明
+        patchContent = [
+            `# Trae Harvester - Git Patch Export`,
+            `# 分支: ${currentBranch}`,
+            `# 时间: ${new Date().toISOString()}`,
+            `# 状态: git diff 命令执行失败`,
+            `# 错误: ${diffResult.stderr}`,
+            `# 退出码: ${diffResult.exitCode}`,
+            '',
+        ].join('\n');
+    } else if (diffResult.stdout.trim() === '') {
+        // diff 为空时写入说明
+        patchContent = [
+            `# Trae Harvester - Git Patch Export`,
+            `# 分支: ${currentBranch}`,
+            `# 时间: ${new Date().toISOString()}`,
+            `# 状态: 无差异 (当前分支与 main 相同)`,
+            '',
+        ].join('\n');
+    } else {
+        patchContent = diffResult.stdout;
+    }
+
+    await atomicWrite(patchFilePath, patchContent);
+
+    vscode.window.showInformationMessage(
+        `✅ Patch 已导出: ${patchFilePath}`
+    );
+
+    // 输出操作日志到 Output Channel 方便调试
+    const channel = vscode.window.createOutputChannel('Trae Harvester');
+    channel.appendLine('=== Git Patch Export Log ===');
+    channel.appendLine(`分支: ${currentBranch}`);
+    channel.appendLine(`输出: ${patchFilePath}`);
+    channel.appendLine(`Patch 大小: ${patchContent.length} bytes`);
+    channel.appendLine('--- 步骤明细 ---');
+    for (const log of logs) {
+        const status = log.skipped ? '⏭ SKIP' : log.success ? '✅ OK' : '❌ FAIL';
+        channel.appendLine(`  ${status} ${log.step}: ${log.command}`);
+        if (log.skipReason) {
+            channel.appendLine(`      原因: ${log.skipReason}`);
+        }
+        if (log.stderr && !log.skipped) {
+            channel.appendLine(`      stderr: ${log.stderr.trim()}`);
+        }
+    }
+    channel.show(true);
+
+    log.timerEnd('exportPatch');
+    log.setSuccess('Patch 导出完成');
+
+    return patchFilePath;
+}
+
+/**
+ * 注册 exportPatch 命令。
+ */
+export function registerExportPatchCommand(context: vscode.ExtensionContext): vscode.Disposable {
+    return vscode.commands.registerCommand('trae-harvester.exportPatch', async () => {
+        try {
+            const config = vscode.workspace.getConfiguration('traeHarvester');
+            const outputPath = config.get<string>('outputPath', '/gitdiff_shared');
+
+            await exportGitPatch(outputPath);
+        } catch (err: any) {
+            const log = getLogger();
+            log.error('GitPatch', 'Patch 导出失败', err);
+            log.setError('Patch 导出失败');
+            vscode.window.showErrorMessage(`❌ Patch 导出失败: ${err.message}`);
+        }
+    });
+}
