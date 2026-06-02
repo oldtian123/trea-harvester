@@ -79,10 +79,15 @@
     "configuration": {
       "title": "Trae Harvester",
       "properties": {
-        "traeHarvester.outputPath": {
+        "traeHarvester.patchOutputPath": {
           "type": "string",
           "default": "/gitdiff_shared",
-          "description": "产物输出的绝对路径 (Absolute path for output artifacts)"
+          "description": "Git Patch 产物的绝对导出路径 (Absolute path for Patch output)"
+        },
+        "traeHarvester.resultsOutputPath": {
+          "type": "string",
+          "default": "/gitdiff_shared",
+          "description": "测试结果 JSON 产物的绝对导出路径 (Absolute path for JSON Results output)"
         },
         "traeHarvester.commandTimeout": {
           "type": "number",

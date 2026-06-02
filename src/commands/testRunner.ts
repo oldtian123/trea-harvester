@@ -403,7 +403,7 @@ async function runSingleStep(stepNumber: number, outputDir: string): Promise<voi
  */
 export async function runStepByNumber(stepNumber: number): Promise<void> {
     const config = vscode.workspace.getConfiguration('traeHarvester');
-    const outputPath = config.get<string>('outputPath', '/gitdiff_shared');
+    const outputPath = config.get<string>('resultsOutputPath', '/gitdiff_shared');
     await runSingleStep(stepNumber, outputPath);
 }
 
@@ -417,7 +417,7 @@ export async function deleteStepFromPlan(stepNumber: number): Promise<void> {
     stepResults.delete(stepNumber);
     
     const config = vscode.workspace.getConfiguration('traeHarvester');
-    const outputPath = config.get<string>('outputPath', '/gitdiff_shared');
+    const outputPath = config.get<string>('resultsOutputPath', '/gitdiff_shared');
     
     if (currentPlan.steps.length === 0 && (!currentPlan.check_items || currentPlan.check_items.length === 0)) {
         currentPlan = null;
@@ -594,7 +594,7 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
     // 命令：一键全自动执行
     const runAllCmd = vscode.commands.registerCommand('trae-harvester.runAllTests', async () => {
         try {
-            const outputPath = config.get<string>('outputPath', '/gitdiff_shared');
+            const outputPath = config.get<string>('resultsOutputPath', '/gitdiff_shared');
             await runAllSteps(outputPath);
         } catch (err: any) {
             getLogger().error('TestRunner', '测试执行失败', err);
@@ -632,7 +632,7 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
                 return;
             }
 
-            const outputPath = config.get<string>('outputPath', '/gitdiff_shared');
+            const outputPath = config.get<string>('resultsOutputPath', '/gitdiff_shared');
             await runSingleStep(selected.stepNumber, outputPath);
         } catch (err: any) {
             vscode.window.showErrorMessage(`❌ 单步执行失败: ${err.message}`);
@@ -660,7 +660,7 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             const testResult = buildTestResult(allResults, currentPlan.steps.length);
             
             const config = vscode.workspace.getConfiguration('traeHarvester');
-            const defaultDir = config.get<string>('outputPath', '/gitdiff_shared');
+            const defaultDir = config.get<string>('resultsOutputPath', '/gitdiff_shared');
             
             let branchName = 'test';
             try {

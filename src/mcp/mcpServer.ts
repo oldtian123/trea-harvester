@@ -197,7 +197,7 @@ function createConfiguredMcpServer(): McpServer {
         async () => {
             try {
                 const config = vscode.workspace.getConfiguration('traeHarvester');
-                const outputDir = config.get<string>('outputPath', '/gitdiff_shared');
+                const outputDir = config.get<string>('patchOutputPath', '/gitdiff_shared');
                 
                 const { exportGitPatch } = require('../commands/gitPatch');
                 let patchContent = '';

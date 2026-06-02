@@ -397,7 +397,7 @@ async function runSingleStep(stepNumber, outputDir) {
  */
 async function runStepByNumber(stepNumber) {
     const config = vscode.workspace.getConfiguration('traeHarvester');
-    const outputPath = config.get('outputPath', '/gitdiff_shared');
+    const outputPath = config.get('resultsOutputPath', '/gitdiff_shared');
     await runSingleStep(stepNumber, outputPath);
 }
 /**
@@ -409,7 +409,7 @@ async function deleteStepFromPlan(stepNumber) {
     currentPlan.steps = currentPlan.steps.filter(s => s.step_number !== stepNumber);
     stepResults.delete(stepNumber);
     const config = vscode.workspace.getConfiguration('traeHarvester');
-    const outputPath = config.get('outputPath', '/gitdiff_shared');
+    const outputPath = config.get('resultsOutputPath', '/gitdiff_shared');
     if (currentPlan.steps.length === 0 && (!currentPlan.check_items || currentPlan.check_items.length === 0)) {
         currentPlan = null;
     }
@@ -568,7 +568,7 @@ function registerTestCommands(context) {
     // 命令：一键全自动执行
     const runAllCmd = vscode.commands.registerCommand('trae-harvester.runAllTests', async () => {
         try {
-            const outputPath = config.get('outputPath', '/gitdiff_shared');
+            const outputPath = config.get('resultsOutputPath', '/gitdiff_shared');
             await runAllSteps(outputPath);
         }
         catch (err) {
@@ -602,7 +602,7 @@ function registerTestCommands(context) {
             if (!selected) {
                 return;
             }
-            const outputPath = config.get('outputPath', '/gitdiff_shared');
+            const outputPath = config.get('resultsOutputPath', '/gitdiff_shared');
             await runSingleStep(selected.stepNumber, outputPath);
         }
         catch (err) {
@@ -629,7 +629,7 @@ function registerTestCommands(context) {
             });
             const testResult = buildTestResult(allResults, currentPlan.steps.length);
             const config = vscode.workspace.getConfiguration('traeHarvester');
-            const defaultDir = config.get('outputPath', '/gitdiff_shared');
+            const defaultDir = config.get('resultsOutputPath', '/gitdiff_shared');
             let branchName = 'test';
             try {
                 const execSync = require('child_process').execSync;

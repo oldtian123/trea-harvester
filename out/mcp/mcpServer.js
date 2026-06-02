@@ -185,7 +185,7 @@ function createConfiguredMcpServer() {
     mcpServer.tool('get_evaluation_evidence', 'Automatically generate a git patch, gather test results, ai context, and manual check items, returning a complete JSON object for evaluation scoring.', {}, async () => {
         try {
             const config = vscode.workspace.getConfiguration('traeHarvester');
-            const outputDir = config.get('outputPath', '/gitdiff_shared');
+            const outputDir = config.get('patchOutputPath', '/gitdiff_shared');
             const { exportGitPatch } = require('../commands/gitPatch');
             let patchContent = '';
             try {

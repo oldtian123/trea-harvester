@@ -240,7 +240,7 @@ function registerExportPatchCommand(context) {
     return vscode.commands.registerCommand('trae-harvester.exportPatch', async () => {
         try {
             const config = vscode.workspace.getConfiguration('traeHarvester');
-            const outputPath = config.get('outputPath', '/gitdiff_shared');
+            const outputPath = config.get('patchOutputPath', '/gitdiff_shared');
             await exportGitPatch(outputPath);
         }
         catch (err) {
