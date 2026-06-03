@@ -82,6 +82,9 @@ async function checkForUpdates(context, isManual = false) {
     }
     catch (e) {
         log.error('AutoUpdater', '检查更新失败', e);
+        if (isManual) {
+            vscode.window.showErrorMessage(`❌ 检查更新失败: ${e.message}`);
+        }
     }
 }
 function fetchUrl(url, token) {
@@ -93,7 +96,12 @@ function fetchUrl(url, token) {
         https.get(url, options, (res) => {
             // 处理重定向 (GitHub Raw 可能会有 301/302)
             if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                return fetchUrl(res.headers.location, token).then(resolve).catch(reject);
+                let redirectUrl = res.headers.location;
+                if (!redirectUrl.startsWith('http')) {
+                    const parsedUrl = new URL(url);
+                    redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${redirectUrl}`;
+                }
+                return fetchUrl(redirectUrl, token).then(resolve).catch(reject);
             }
             if (res.statusCode !== 200) {
                 return reject(new Error(`Failed to fetch ${url}, status code: ${res.statusCode}`));
@@ -175,7 +183,12 @@ function downloadFile(url, dest, progress, token) {
             https.get(targetUrl, options, (res) => {
                 // 处理重定向
                 if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                    return doDownload(res.headers.location);
+                    let redirectUrl = res.headers.location;
+                    if (!redirectUrl.startsWith('http')) {
+                        const parsedUrl = new URL(targetUrl);
+                        redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${redirectUrl}`;
+                    }
+                    return doDownload(redirectUrl);
                 }
                 if (res.statusCode !== 200) {
                     return reject(new Error(`Failed to download, status code: ${res.statusCode}`));
