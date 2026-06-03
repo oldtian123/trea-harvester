@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { runShellCommand } from '../utils/shell';
 import { writeJson } from '../utils/fileUtils';
 import { TestPlan, TestStep, StepResult, TestResult } from '../types';
@@ -18,6 +19,23 @@ let stepResults: Map<number, StepResult> = new Map();
 let webviewRef: vscode.Webview | null = null;
 /** 当前 AI 上下文 */
 let currentAiContext: string = '';
+
+function getResultFileName(): string {
+    let branchName = 'test';
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (workspaceFolder) {
+            const execSync = require('child_process').execSync;
+            const branch = execSync('git branch --show-current', { cwd: workspaceFolder, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            if (branch) {
+                branchName = branch.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+    return `${branchName}_result.json`;
+}
 
 // ==========================================
 // 暴露的方法供 Webview 侧调用或刷新
@@ -335,8 +353,8 @@ async function runAllSteps(outputDir: string): Promise<void> {
     // 生成汇总结果
     const testResult = buildTestResult(results, currentPlan!.steps.length);
 
-    // 写入 test_result.json
-    const outputPath = path.join(outputDir, 'test_result.json');
+    // 写入动态命名的结果文件
+    const outputPath = path.join(outputDir, getResultFileName());
     await writeJson(outputPath, testResult);
     log.info('TestRunner', `结果已写入: ${outputPath}`);
     log.timerEnd('runAllTests');
@@ -395,7 +413,7 @@ async function runSingleStep(stepNumber: number, outputDir: string): Promise<voi
     });
 
     const testResult = buildTestResult(allResults, currentPlan.steps.length);
-    const outputPath = path.join(outputDir, 'test_result.json');
+    const outputPath = path.join(outputDir, getResultFileName());
     await writeJson(outputPath, testResult);
 }
 
@@ -435,7 +453,7 @@ export async function deleteStepFromPlan(stepNumber: number): Promise<void> {
             };
         });
         const testResult = buildTestResult(allResults, currentPlan.steps.length);
-        const resultPath = path.join(outputPath, 'test_result.json');
+        const resultPath = path.join(outputPath, getResultFileName());
         // Ignore write error if it fails (e.g. dir doesn't exist)
         writeJson(resultPath, testResult).catch(() => {});
     }
@@ -467,7 +485,7 @@ export async function resetStepResults(): Promise<void> {
     }));
     
     const testResult = buildTestResult(allResults, currentPlan.steps.length);
-    const resultPath = path.join(outputPath, 'test_result.json');
+    const resultPath = path.join(outputPath, getResultFileName());
     writeJson(resultPath, testResult).catch(() => {});
     
     syncPlanToWebview();
@@ -693,18 +711,7 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
             const config = vscode.workspace.getConfiguration('traeHarvester');
             const defaultDir = config.get<string>('resultsOutputPath', '/gitdiff_shared');
             
-            let branchName = 'test';
-            try {
-                const execSync = require('child_process').execSync;
-                const branch = execSync('git branch --show-current', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-                if (branch) {
-                    branchName = branch;
-                }
-            } catch (e) {
-                // ignore
-            }
-            
-            const targetPath = path.join(defaultDir, `${branchName}_result.json`);
+            const targetPath = path.join(defaultDir, getResultFileName());
             
             await writeJson(targetPath, testResult);
             vscode.window.showInformationMessage(`✅ 测试结果已成功导出至: ${targetPath}`);
