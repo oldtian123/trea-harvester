@@ -57,5 +57,6 @@
 
 1. **安装**：通过 VSIX 安装此扩展。
 2. **打开面板**：点击侧边栏的 🚜 **Test Steps** 图标，打开工具箱。
-3. **启动 MCP**：点击 `🔴 启动 MCP`，变成绿灯后，在你的 AI IDE (如 Cursor/Trae/Codex) 里配置 MCP 地址 `http://localhost:3000/mcp`。
+3. **启动 MCP**：点击 `🔴 启动 MCP`，变成绿灯后，在你的 AI IDE (如 Cursor/Trae/Codex) 里配置 MCP 地址 `http://localhost:3000/mcp`，协议为流式HTTP。
 4. **尽情调遣**：在聊天框告诉模型：“请用 trea_harvester_import_test_plan 下发测试计划”，模型将全自动接管流程！
+5. **配套Prompt**: 插件需要与配套Prompt一起使用。
