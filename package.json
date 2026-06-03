@@ -2,7 +2,7 @@
   "name": "trae-harvester",
   "displayName": "Trae Harvester (Trae 自动化收割机)",
   "description": "一键收割代码资产、测试状态和 AI 思考上下文，输出结构化 JSON 供下游 AI 打分评估",
-  "version": "0.4.3-beta",
+  "version": "0.4.4-beta",
   "publisher": "trae-harvester",
   "engines": {
     "vscode": "^1.85.0"
@@ -98,6 +98,11 @@
           "type": "number",
           "default": 3000,
           "description": "MCP Server 监听的本地端口 (默认 3000)"
+        },
+        "traeHarvester.githubToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub Personal Access Token，用于解决无界面后台执行 git push 时的鉴权拦截问题 (格式通常为 ghp_...)"
         }
       }
     }

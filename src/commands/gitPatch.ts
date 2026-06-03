@@ -137,17 +137,36 @@ export async function exportGitPatch(outputDir: string): Promise<string> {
         }
 
         // ---- Step 5: git push ----
-        log.subSeparator(`git push origin ${currentBranch}`);
+        const configToken = vscode.workspace.getConfiguration('traeHarvester').get<string>('githubToken');
+        const githubToken = configToken || process.env.GITHUB_TOKEN;
+        
+        let pushCommand = `git push origin ${currentBranch}`;
+        let pushLogCommand = pushCommand;
+        
+        if (githubToken) {
+            const urlResult = await execCommand('git remote get-url origin', execOpts);
+            if (urlResult.exitCode === 0) {
+                let remoteUrl = urlResult.stdout.trim();
+                if (remoteUrl.startsWith('https://github.com')) {
+                    const authUrl = remoteUrl.replace('https://github.com', `https://${githubToken}@github.com`);
+                    pushCommand = `git push ${authUrl} ${currentBranch}`;
+                    pushLogCommand = `git push https://***@github.com/... ${currentBranch}`;
+                    log.info('GitPatch', '💡 检测到 GitHub Token，已自动注入到 Push URL 中进行鉴权');
+                }
+            }
+        }
+
+        log.subSeparator(pushLogCommand);
         const pushResult = await execCommand(
-            `git push origin ${currentBranch}`,
+            pushCommand,
             execOpts
         );
         logs.push({
             step: 'git push',
-            command: `git push origin ${currentBranch}`,
+            command: pushLogCommand,
             success: pushResult.exitCode === 0,
             stdout: pushResult.stdout,
-            stderr: pushResult.stderr,
+            stderr: githubToken ? pushResult.stderr.split(githubToken).join('***') : pushResult.stderr,
             exitCode: pushResult.exitCode,
         });
 
@@ -156,7 +175,7 @@ export async function exportGitPatch(outputDir: string): Promise<string> {
         if (pushResult.exitCode !== 0) {
             // push 失败记录警告但继续生成 patch
             vscode.window.showWarningMessage(
-                `⚠️ git push 失败 (code=${pushResult.exitCode}): ${pushResult.stderr}`
+                `⚠️ git push 失败 (code=${pushResult.exitCode}): ${pushResult.stderr.split(githubToken || 'never_match').join('***')}`
             );
         }
     }

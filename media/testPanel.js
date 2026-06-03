@@ -266,6 +266,8 @@
         switch (message.command) {
             case 'loadSteps':
                 steps = message.steps || [];
+                // 如果是从后端重新加载（如点击重置后），清空前端状态缓存
+                results.clear();
                 renderSteps();
                 renderCheckItems(message.checkItems || []);
                 
@@ -499,6 +501,11 @@
                 failed++;
             }
         });
+
+        if (pending === steps.length) {
+            summary.style.display = 'none';
+            return;
+        }
 
         if (pending > 0 && passed === 0 && failed === 0) {
             summary.style.display = 'none';

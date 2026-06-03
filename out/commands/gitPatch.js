@@ -150,14 +150,30 @@ async function exportGitPatch(outputDir) {
             vscode.window.showWarningMessage(`⚠️ git commit 非零退出 (code=${commitResult.exitCode}): ${commitResult.stderr || commitResult.stdout}`);
         }
         // ---- Step 5: git push ----
-        log.subSeparator(`git push origin ${currentBranch}`);
-        const pushResult = await (0, shell_1.execCommand)(`git push origin ${currentBranch}`, execOpts);
+        const configToken = vscode.workspace.getConfiguration('traeHarvester').get('githubToken');
+        const githubToken = configToken || process.env.GITHUB_TOKEN;
+        let pushCommand = `git push origin ${currentBranch}`;
+        let pushLogCommand = pushCommand;
+        if (githubToken) {
+            const urlResult = await (0, shell_1.execCommand)('git remote get-url origin', execOpts);
+            if (urlResult.exitCode === 0) {
+                let remoteUrl = urlResult.stdout.trim();
+                if (remoteUrl.startsWith('https://github.com')) {
+                    const authUrl = remoteUrl.replace('https://github.com', `https://${githubToken}@github.com`);
+                    pushCommand = `git push ${authUrl} ${currentBranch}`;
+                    pushLogCommand = `git push https://***@github.com/... ${currentBranch}`;
+                    log.info('GitPatch', '💡 检测到 GitHub Token，已自动注入到 Push URL 中进行鉴权');
+                }
+            }
+        }
+        log.subSeparator(pushLogCommand);
+        const pushResult = await (0, shell_1.execCommand)(pushCommand, execOpts);
         logs.push({
             step: 'git push',
-            command: `git push origin ${currentBranch}`,
+            command: pushLogCommand,
             success: pushResult.exitCode === 0,
             stdout: pushResult.stdout,
-            stderr: pushResult.stderr,
+            stderr: githubToken ? pushResult.stderr.split(githubToken).join('***') : pushResult.stderr,
             exitCode: pushResult.exitCode,
         });
         log.detail('exitCode', String(pushResult.exitCode));
@@ -166,7 +182,7 @@ async function exportGitPatch(outputDir) {
         }
         if (pushResult.exitCode !== 0) {
             // push 失败记录警告但继续生成 patch
-            vscode.window.showWarningMessage(`⚠️ git push 失败 (code=${pushResult.exitCode}): ${pushResult.stderr}`);
+            vscode.window.showWarningMessage(`⚠️ git push 失败 (code=${pushResult.exitCode}): ${pushResult.stderr.split(githubToken || 'never_match').join('***')}`);
         }
     }
     // ---- Step 6: 生成 diff patch ----
