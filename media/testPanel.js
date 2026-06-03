@@ -425,7 +425,7 @@
             
             const label = document.createElement('label');
             label.htmlFor = `check-${index}`;
-            label.textContent = item.item;
+            label.textContent = item.text || item.item; // Fallback to item if someone used wrong key
             
             const deleteBtn = document.createElement('span');
             deleteBtn.innerHTML = '×';
@@ -462,6 +462,12 @@
         const result = results.get(stepNumber);
         if (result) {
             statusEl.textContent = result.status;
+            
+            // 恢复 playBtn 状态
+            const playBtn = stepEl.querySelector('.btn-small');
+            if (playBtn) {
+                playBtn.innerHTML = '▶';
+            }
             
             if (result.status === 'PASS') {
                 stepEl.classList.add('pass');

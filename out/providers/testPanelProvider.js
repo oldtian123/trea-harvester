@@ -337,11 +337,6 @@ class TestPanelProvider {
                 <span id="summary-text" style="font-weight: 600;"></span>
             </div>
 
-            <div id="check-items-section" class="check-items-section" style="display: none; margin-top: var(--spacing-sm);">
-                <div class="section-header" style="margin-bottom: 8px;">✅ 人工检查项</div>
-                <div id="check-items-list"></div>
-            </div>
-
             <div id="empty-state" class="empty-state" style="margin-top: 30px;">
                 <div style="font-size: 24px; margin-bottom: 8px;">📭</div>
                 <div>暂无测试步骤</div>
@@ -349,6 +344,12 @@ class TestPanelProvider {
             </div>
 
             <div id="steps-list" class="steps-list" style="margin-top: var(--spacing-sm);"></div>
+
+            <!-- 检查项列表 -->
+            <div id="check-items-section" class="check-items-section" style="display: none; margin-top: var(--spacing-sm);">
+                <div class="section-header" style="margin-bottom: 8px;">✅ 人工检查项</div>
+                <div id="check-items-list"></div>
+            </div>
         </div>
 
         <!-- AI Context Card -->
