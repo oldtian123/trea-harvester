@@ -704,16 +704,10 @@ export function registerTestCommands(context: vscode.ExtensionContext): vscode.D
                 // ignore
             }
             
-            const uri = await vscode.window.showSaveDialog({
-                defaultUri: vscode.Uri.file(path.join(defaultDir, `${branchName}_result.json`)),
-                filters: { 'JSON': ['json'] },
-                saveLabel: '导出结果'
-            });
+            const targetPath = path.join(defaultDir, `${branchName}_result.json`);
             
-            if (uri) {
-                await writeJson(uri.fsPath, testResult);
-                vscode.window.showInformationMessage(`✅ 测试结果已成功导出至: ${uri.fsPath}`);
-            }
+            await writeJson(targetPath, testResult);
+            vscode.window.showInformationMessage(`✅ 测试结果已成功导出至: ${targetPath}`);
         } catch (err: any) {
             getLogger().error('TestRunner', '测试结果导出失败', err);
             vscode.window.showErrorMessage(`❌ 测试结果导出失败: ${err.message}`);

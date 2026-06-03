@@ -668,15 +668,9 @@ function registerTestCommands(context) {
             catch (e) {
                 // ignore
             }
-            const uri = await vscode.window.showSaveDialog({
-                defaultUri: vscode.Uri.file(path.join(defaultDir, `${branchName}_result.json`)),
-                filters: { 'JSON': ['json'] },
-                saveLabel: '导出结果'
-            });
-            if (uri) {
-                await (0, fileUtils_1.writeJson)(uri.fsPath, testResult);
-                vscode.window.showInformationMessage(`✅ 测试结果已成功导出至: ${uri.fsPath}`);
-            }
+            const targetPath = path.join(defaultDir, `${branchName}_result.json`);
+            await (0, fileUtils_1.writeJson)(targetPath, testResult);
+            vscode.window.showInformationMessage(`✅ 测试结果已成功导出至: ${targetPath}`);
         }
         catch (err) {
             (0, logger_1.getLogger)().error('TestRunner', '测试结果导出失败', err);
