@@ -11,6 +11,7 @@ import { TestPanelProvider } from './providers/testPanelProvider';
 import { getLogger } from './utils/logger';
 import { startMcpServer, stopMcpServer } from './mcp/mcpServer';
 import { checkForUpdates } from './utils/autoUpdater';
+import * as path from 'path';
 
 /**
  * 扩展激活时调用。
@@ -109,13 +110,17 @@ export function activate(context: vscode.ExtensionContext) {
     log.debug('Extension', '已注册命令: trae-harvester.runDiagnostics');
     log.debug('Extension', '已注册命令: trae-harvester.showLogs');
 
-    const checkUpdatesCmd = vscode.commands.registerCommand(
-        'trae-harvester.checkForUpdates',
-        () => {
+    context.subscriptions.push(
+        vscode.commands.registerCommand('trae-harvester.checkForUpdates', () => {
             checkForUpdates(context, true);
-        }
+        }),
+        vscode.commands.registerCommand('trae-harvester.copyRouterCommand', () => {
+            const routerPath = path.join(context.extensionPath, 'out', 'mcp-router.js');
+            const command = `node "${routerPath}"`;
+            vscode.env.clipboard.writeText(command);
+            vscode.window.showInformationMessage('✅ MCP Router 启动命令已复制到剪贴板！请在 Codex 或 Cline 的 MCP 设置中将其配置为 command。');
+        })
     );
-    context.subscriptions.push(checkUpdatesCmd);
 
     // ---- 显示欢迎信息 ----
     log.info('Extension', '🚀 Trae Harvester 初始化完成!');

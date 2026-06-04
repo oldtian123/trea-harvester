@@ -46,6 +46,7 @@ const sse_js_1 = require("@modelcontextprotocol/sdk/server/sse.js");
 const zod_1 = require("zod");
 const fs = __importStar(require("fs"));
 const logger_1 = require("../utils/logger");
+const registry_1 = require("../utils/registry");
 const testRunner_1 = require("../commands/testRunner");
 let serverInstance = null;
 // ==========================================
@@ -307,15 +308,34 @@ async function startMcpServer() {
             });
         }
     });
-    const port = vscode.workspace.getConfiguration('traeHarvester').get('mcpPort') || 3000;
-    serverInstance = app.listen(port, () => {
-        log.info('MCP', `MCP Server listening on http://localhost:${port}/mcp`);
-    });
+    const startPort = vscode.workspace.getConfiguration('traeHarvester').get('mcpPort') || 3000;
+    const tryListen = (port) => {
+        if (port > startPort + 50) {
+            log.error('MCP', 'Could not find an available port for MCP Server.');
+            return;
+        }
+        serverInstance = app.listen(port, () => {
+            log.info('MCP', `MCP Server listening on http://localhost:${port}/mcp`);
+            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
+            (0, registry_1.registerInstance)(port, workspacePath);
+        }).on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                log.info('MCP', `Port ${port} in use, trying ${port + 1}...`);
+                serverInstance = null;
+                tryListen(port + 1);
+            }
+            else {
+                log.error('MCP', 'Failed to start MCP Server', err);
+            }
+        });
+    };
+    tryListen(startPort);
 }
 function stopMcpServer() {
     if (serverInstance) {
         serverInstance.close();
         serverInstance = null;
+        (0, registry_1.unregisterInstance)();
         globalStatelessTransport = null;
         activeSseTransports.clear();
         (0, logger_1.getLogger)().info('MCP', 'MCP Server stopped.');

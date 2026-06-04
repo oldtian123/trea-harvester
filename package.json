@@ -2,7 +2,7 @@
   "name": "trae-harvester",
   "displayName": "Trae Harvester (Trae 自动化收割机)",
   "description": "一键收割代码资产、测试状态和 AI 思考上下文，输出结构化 JSON 供下游 AI 打分评估",
-  "version": "0.4.9-beta",
+  "version": "0.5.0-beta",
   "publisher": "trae-harvester",
   "engines": {
     "vscode": "^1.85.0"
@@ -56,6 +56,11 @@
         "command": "trae-harvester.exportLogs",
         "title": "Export Logs (一键导出运行日志)",
         "category": "Trae Harvester"
+      },
+      {
+        "command": "trae-harvester.copyRouterCommand",
+        "title": "Copy MCP Router Command (复制统一路由命令)",
+        "category": "Trae Harvester"
       }
     ],
     "viewsContainers": {
@@ -97,7 +102,23 @@
         "traeHarvester.mcpPort": {
           "type": "number",
           "default": 3000,
-          "description": "MCP Server 监听的本地端口 (默认 3000)"
+          "description": "MCP Server 监听的本地首选端口 (默认 3000，将被动态探测向后顺延)"
+        },
+        "traeHarvester.modelOptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["GPT-4o", "Claude-3.5-Sonnet", "DeepSeek-V2", "Codex"],
+          "description": "测试面板中可选的大模型标识列表"
+        },
+        "traeHarvester.promptOptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["Prompt_V1", "Prompt_V2_Refactored"],
+          "description": "测试面板中可选的提示词版本标识列表"
         },
         "traeHarvester.githubToken": {
           "type": "string",

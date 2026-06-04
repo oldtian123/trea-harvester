@@ -60,6 +60,10 @@
     const checkItemsSection = document.getElementById('check-items-section');
     const checkItemsList = document.getElementById('check-items-list');
 
+    // Identifiers
+    const selectModel = document.getElementById('select-model');
+    const selectPrompt = document.getElementById('select-prompt');
+
     // ---- Panel 控制 ----
     function closeAllPanels() {
         panels.forEach(id => {
@@ -259,6 +263,22 @@
         });
     }
 
+    // ---- 标识符变更通知 ----
+    function notifyIdentifiersChange() {
+        if (!selectModel || !selectPrompt) return;
+        vscode.postMessage({
+            command: 'updateIdentifiers',
+            modelId: selectModel.value,
+            promptId: selectPrompt.value
+        });
+    }
+
+    if (selectModel) {
+        selectModel.addEventListener('change', notifyIdentifiersChange);
+    }
+    if (selectPrompt) {
+        selectPrompt.addEventListener('change', notifyIdentifiersChange);
+    }
 
     // ---- 消息总线 (接收后端回传) ----
     window.addEventListener('message', event => {
@@ -266,10 +286,45 @@
         switch (message.command) {
             case 'loadSteps':
                 steps = message.steps || [];
+                
+                // Render Identifiers Options
+                if (selectModel && message.modelOptions) {
+                    selectModel.innerHTML = '';
+                    message.modelOptions.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt;
+                        option.textContent = opt;
+                        selectModel.appendChild(option);
+                    });
+                    if (message.modelId) {
+                        selectModel.value = message.modelId;
+                    } else if (message.modelOptions.length > 0) {
+                        selectModel.value = message.modelOptions[0];
+                        notifyIdentifiersChange();
+                    }
+                }
+                
+                if (selectPrompt && message.promptOptions) {
+                    selectPrompt.innerHTML = '';
+                    message.promptOptions.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt;
+                        option.textContent = opt;
+                        selectPrompt.appendChild(option);
+                    });
+                    if (message.promptId) {
+                        selectPrompt.value = message.promptId;
+                    } else if (message.promptOptions.length > 0) {
+                        selectPrompt.value = message.promptOptions[0];
+                        notifyIdentifiersChange();
+                    }
+                }
+
                 // 如果是从后端重新加载（如点击重置后），清空前端状态缓存
                 results.clear();
                 renderSteps();
                 renderCheckItems(message.checkItems || []);
+                updateSummary();
                 
                 if (btnToggleMcp) {
                     const mcpTextEl = btnToggleMcp.querySelector('.btn-text');

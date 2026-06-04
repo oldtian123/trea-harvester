@@ -13,6 +13,9 @@ export interface CheckItem {
 export interface TestPlan {
     steps: TestStep[];
     check_items?: CheckItem[];
+    /** 评估相关的模型和Prompt标识 */
+    model_id?: string;
+    prompt_id?: string;
 }
 
 /** 单个测试步骤 */
@@ -49,6 +52,23 @@ export interface TestResult {
     steps: StepResult[];
     check_items?: CheckItem[];
     ai_context?: string;
+    /** 评估相关的模型和Prompt标识 */
+    model_id?: string;
+    prompt_id?: string;
+}
+
+// ---- 功能四：多窗口聚合路由与注册表 ----
+
+export type SessionStatus = 'IDLE' | 'RUNNING' | 'COMPLETED';
+
+export interface RegistryEntry {
+    port: number;
+    pid: number;
+    workspace: string;
+    status: SessionStatus;
+    model_id?: string;
+    prompt_id?: string;
+    last_heartbeat: number;
 }
 
 // ---- 功能三：AI 上下文 ----

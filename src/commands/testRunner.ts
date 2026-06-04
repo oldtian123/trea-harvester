@@ -6,10 +6,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { runShellCommand } from '../utils/shell';
 import { writeJson } from '../utils/fileUtils';
-import { TestPlan, TestStep, StepResult, TestResult } from '../types';
+import { TestPlan, TestStep, StepResult, TestResult, SessionStatus } from '../types';
 import { getLogger } from '../utils/logger';
+import { updateInstanceStatus } from '../utils/registry';
+import { exportGitPatch } from './gitPatch';
 
 /** 当前加载的测试计划（模块级状态） */
 let currentPlan: TestPlan | null = null;
@@ -35,6 +38,104 @@ function getResultFileName(): string {
         // ignore
     }
     return `${branchName}_result.json`;
+}
+
+/**
+ * 更新测试计划的模型和Prompt标识
+ */
+export function updatePlanIdentifiers(modelId: string, promptId: string): void {
+    if (!currentPlan) {
+        currentPlan = { steps: [], check_items: [], model_id: modelId, prompt_id: promptId };
+    } else {
+        currentPlan.model_id = modelId;
+        currentPlan.prompt_id = promptId;
+    }
+    
+    // Check current overall status based on stepResults
+    let status: SessionStatus = 'IDLE';
+    if (currentPlan.steps.length > 0) {
+        const hasPending = currentPlan.steps.some(s => {
+            const r = stepResults.get(s.step_number);
+            return !r || r.status === 'PENDING';
+        });
+        const hasCompleted = currentPlan.steps.some(s => {
+            const r = stepResults.get(s.step_number);
+            return r && ['PASS', 'FAIL', 'ERROR', 'TIMEOUT', 'SKIP'].includes(r.status);
+        });
+        if (!hasPending && hasCompleted) {
+            status = 'COMPLETED';
+        } else if (hasCompleted || currentPlan.steps.length > 0) {
+            status = 'RUNNING';
+        }
+    }
+    
+    updateInstanceStatus(status, modelId, promptId);
+    
+    // Automatically snapshot history if completed
+    if (status === 'COMPLETED') {
+        saveHistorySnapshot();
+    }
+}
+
+/**
+ * 将结果留存至本地历史记录错题本
+ */
+async function saveHistorySnapshot() {
+    if (!currentPlan) return;
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceFolder) return;
+        
+        const historyDir = path.join(workspaceFolder, '.trae_harvester_history');
+        if (!fs.existsSync(historyDir)) {
+            fs.mkdirSync(historyDir, { recursive: true });
+        }
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const modelId = currentPlan.model_id || 'UnknownModel';
+        const promptId = currentPlan.prompt_id || 'UnknownPrompt';
+        
+        // 生成快照
+        const allResults: StepResult[] = currentPlan.steps.map(s => stepResults.get(s.step_number) || {
+            step_number: s.step_number,
+            title: s.title,
+            command: s.command,
+            status: 'PENDING',
+            exit_code: null,
+            duration_ms: 0,
+            console_output: ''
+        });
+        
+        const testResult = buildTestResult(allResults, currentPlan.steps.length);
+        testResult.model_id = modelId;
+        testResult.prompt_id = promptId;
+        
+        // 获取 Patch
+        let patchContent = '';
+        try {
+            const { getStoredGitPatchContent } = require('./gitPatch');
+            patchContent = getStoredGitPatchContent();
+            if (!patchContent) {
+                // 如果内存没有，现场导出一份到临时目录并读取
+                const tmpDir = path.join(os.tmpdir(), 'trae_harvester_tmp');
+                await exportGitPatch(tmpDir);
+                patchContent = getStoredGitPatchContent();
+            }
+        } catch (e) {
+            patchContent = `Failed to get patch: ${e}`;
+        }
+        
+        const snapshotFile = path.join(historyDir, `${timestamp}_${modelId}_${promptId}.json`);
+        const snapshotData = {
+            test_result: testResult,
+            git_patch: patchContent
+        };
+        
+        fs.writeFileSync(snapshotFile, JSON.stringify(snapshotData, null, 2), 'utf-8');
+        getLogger().info('TestRunner', `History snapshot saved: ${snapshotFile}`);
+    } catch (e: any) {
+        getLogger().error('TestRunner', 'Failed to save history snapshot', e);
+    }
 }
 
 // ==========================================
@@ -365,6 +466,10 @@ async function runAllSteps(outputDir: string): Promise<void> {
         command: 'allCompleted',
         result: testResult,
     });
+    
+    // Update registry status to COMPLETED
+    updateInstanceStatus('COMPLETED', currentPlan.model_id, currentPlan.prompt_id);
+    saveHistorySnapshot();
 
     const icon = testResult.final_status === 'PASS' ? '✅' : testResult.final_status === 'PARTIAL' ? '⚠️' : '❌';
     vscode.window.showInformationMessage(
@@ -415,6 +520,9 @@ async function runSingleStep(stepNumber: number, outputDir: string): Promise<voi
     const testResult = buildTestResult(allResults, currentPlan.steps.length);
     const outputPath = path.join(outputDir, getResultFileName());
     await writeJson(outputPath, testResult);
+    
+    // Update registry status by recalculating
+    updatePlanIdentifiers(currentPlan.model_id || '', currentPlan.prompt_id || '');
 }
 
 /**
@@ -470,6 +578,9 @@ export async function resetStepResults(): Promise<void> {
     // 清空结果
     stepResults.clear();
     
+    // Update registry status to RUNNING
+    updateInstanceStatus('RUNNING', currentPlan.model_id, currentPlan.prompt_id);
+
     // 生成 PENDING 状态的新 test_result.json
     const config = vscode.workspace.getConfiguration('traeHarvester');
     const outputPath = config.get<string>('resultsOutputPath', '/gitdiff_shared');

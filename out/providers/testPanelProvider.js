@@ -154,6 +154,10 @@ class TestPanelProvider {
                 case 'checkUpdates':
                     await vscode.commands.executeCommand('trae-harvester.checkForUpdates');
                     break;
+                case 'updateIdentifiers':
+                    const { updatePlanIdentifiers } = require('../commands/testRunner');
+                    updatePlanIdentifiers(message.modelId, message.promptId);
+                    break;
             }
         }, undefined, []);
         // 当 Webview 被销毁时清除引用
@@ -168,12 +172,19 @@ class TestPanelProvider {
         const plan = (0, testRunner_1.getCurrentPlan)();
         const { isMcpServerRunning } = require('../mcp/mcpServer');
         const isMcpRunning = isMcpServerRunning();
+        const config = vscode.workspace.getConfiguration('traeHarvester');
+        const modelOptions = config.get('modelOptions') || [];
+        const promptOptions = config.get('promptOptions') || [];
         if (plan && this._view) {
             this._view.webview.postMessage({
                 command: 'loadSteps',
                 steps: plan.steps,
                 checkItems: plan.check_items || [],
-                isMcpRunning
+                isMcpRunning,
+                modelOptions,
+                promptOptions,
+                modelId: plan.model_id || '',
+                promptId: plan.prompt_id || ''
             });
             // 同步已有的执行结果
             const results = (0, testRunner_1.getStepResults)();
@@ -190,7 +201,11 @@ class TestPanelProvider {
                 command: 'loadSteps',
                 steps: [],
                 checkItems: [],
-                isMcpRunning
+                isMcpRunning,
+                modelOptions,
+                promptOptions,
+                modelId: '',
+                promptId: ''
             });
         }
     }
@@ -219,6 +234,18 @@ class TestPanelProvider {
         <div class="section-card">
             <div class="section-header">
                 <span>🎛️ Harvester 工具箱</span>
+            </div>
+
+            <!-- Identifiers Section -->
+            <div style="display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+                <div style="flex: 1;">
+                    <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">测试模型 (Model)</label>
+                    <select id="select-model" class="form-select" style="width: 100%; padding: 4px; border: 1px solid var(--card-border); border-radius: 4px; background: var(--card-bg); color: var(--text-primary);"></select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">测试提示词 (Prompt)</label>
+                    <select id="select-prompt" class="form-select" style="width: 100%; padding: 4px; border: 1px solid var(--card-border); border-radius: 4px; background: var(--card-bg); color: var(--text-primary);"></select>
+                </div>
             </div>
             
             <div class="actions-grid">

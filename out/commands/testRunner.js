@@ -37,6 +37,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.updatePlanIdentifiers = updatePlanIdentifiers;
 exports.getAiContext = getAiContext;
 exports.setAiContext = setAiContext;
 exports.syncPlanToWebview = syncPlanToWebview;
@@ -57,9 +58,13 @@ exports.getTestResultsForEvidence = getTestResultsForEvidence;
 exports.registerTestCommands = registerTestCommands;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
+const os = __importStar(require("os"));
 const shell_1 = require("../utils/shell");
 const fileUtils_1 = require("../utils/fileUtils");
 const logger_1 = require("../utils/logger");
+const registry_1 = require("../utils/registry");
+const gitPatch_1 = require("./gitPatch");
 /** 当前加载的测试计划（模块级状态） */
 let currentPlan = null;
 /** 当前的步骤结果（模块级状态，支持增量执行） */
@@ -84,6 +89,98 @@ function getResultFileName() {
         // ignore
     }
     return `${branchName}_result.json`;
+}
+/**
+ * 更新测试计划的模型和Prompt标识
+ */
+function updatePlanIdentifiers(modelId, promptId) {
+    if (!currentPlan) {
+        currentPlan = { steps: [], check_items: [], model_id: modelId, prompt_id: promptId };
+    }
+    else {
+        currentPlan.model_id = modelId;
+        currentPlan.prompt_id = promptId;
+    }
+    // Check current overall status based on stepResults
+    let status = 'IDLE';
+    if (currentPlan.steps.length > 0) {
+        const hasPending = currentPlan.steps.some(s => {
+            const r = stepResults.get(s.step_number);
+            return !r || r.status === 'PENDING';
+        });
+        const hasCompleted = currentPlan.steps.some(s => {
+            const r = stepResults.get(s.step_number);
+            return r && ['PASS', 'FAIL', 'ERROR', 'TIMEOUT', 'SKIP'].includes(r.status);
+        });
+        if (!hasPending && hasCompleted) {
+            status = 'COMPLETED';
+        }
+        else if (hasCompleted || currentPlan.steps.length > 0) {
+            status = 'RUNNING';
+        }
+    }
+    (0, registry_1.updateInstanceStatus)(status, modelId, promptId);
+    // Automatically snapshot history if completed
+    if (status === 'COMPLETED') {
+        saveHistorySnapshot();
+    }
+}
+/**
+ * 将结果留存至本地历史记录错题本
+ */
+async function saveHistorySnapshot() {
+    if (!currentPlan)
+        return;
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceFolder)
+            return;
+        const historyDir = path.join(workspaceFolder, '.trae_harvester_history');
+        if (!fs.existsSync(historyDir)) {
+            fs.mkdirSync(historyDir, { recursive: true });
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const modelId = currentPlan.model_id || 'UnknownModel';
+        const promptId = currentPlan.prompt_id || 'UnknownPrompt';
+        // 生成快照
+        const allResults = currentPlan.steps.map(s => stepResults.get(s.step_number) || {
+            step_number: s.step_number,
+            title: s.title,
+            command: s.command,
+            status: 'PENDING',
+            exit_code: null,
+            duration_ms: 0,
+            console_output: ''
+        });
+        const testResult = buildTestResult(allResults, currentPlan.steps.length);
+        testResult.model_id = modelId;
+        testResult.prompt_id = promptId;
+        // 获取 Patch
+        let patchContent = '';
+        try {
+            const { getStoredGitPatchContent } = require('./gitPatch');
+            patchContent = getStoredGitPatchContent();
+            if (!patchContent) {
+                // 如果内存没有，现场导出一份到临时目录并读取
+                const tmpDir = path.join(os.tmpdir(), 'trae_harvester_tmp');
+                await (0, gitPatch_1.exportGitPatch)(tmpDir);
+                patchContent = getStoredGitPatchContent();
+            }
+        }
+        catch (e) {
+            patchContent = `Failed to get patch: ${e}`;
+        }
+        const snapshotFile = path.join(historyDir, `${timestamp}_${modelId}_${promptId}.json`);
+        const snapshotData = {
+            test_result: testResult,
+            git_patch: patchContent
+        };
+        fs.writeFileSync(snapshotFile, JSON.stringify(snapshotData, null, 2), 'utf-8');
+        (0, logger_1.getLogger)().info('TestRunner', `History snapshot saved: ${snapshotFile}`);
+    }
+    catch (e) {
+        (0, logger_1.getLogger)().error('TestRunner', 'Failed to save history snapshot', e);
+    }
 }
 // ==========================================
 // 暴露的方法供 Webview 侧调用或刷新
@@ -372,6 +469,9 @@ async function runAllSteps(outputDir) {
         command: 'allCompleted',
         result: testResult,
     });
+    // Update registry status to COMPLETED
+    (0, registry_1.updateInstanceStatus)('COMPLETED', currentPlan.model_id, currentPlan.prompt_id);
+    saveHistorySnapshot();
     const icon = testResult.final_status === 'PASS' ? '✅' : testResult.final_status === 'PARTIAL' ? '⚠️' : '❌';
     vscode.window.showInformationMessage(`${icon} 测试完成: ${testResult.passed_steps}/${testResult.total_steps} 通过 → ${outputPath}`);
 }
@@ -410,6 +510,8 @@ async function runSingleStep(stepNumber, outputDir) {
     const testResult = buildTestResult(allResults, currentPlan.steps.length);
     const outputPath = path.join(outputDir, getResultFileName());
     await (0, fileUtils_1.writeJson)(outputPath, testResult);
+    // Update registry status by recalculating
+    updatePlanIdentifiers(currentPlan.model_id || '', currentPlan.prompt_id || '');
 }
 /**
  * 通过明确的步骤号执行（供 Webview 界面直接调用）。
@@ -459,6 +561,8 @@ async function resetStepResults() {
         return;
     // 清空结果
     stepResults.clear();
+    // Update registry status to RUNNING
+    (0, registry_1.updateInstanceStatus)('RUNNING', currentPlan.model_id, currentPlan.prompt_id);
     // 生成 PENDING 状态的新 test_result.json
     const config = vscode.workspace.getConfiguration('traeHarvester');
     const outputPath = config.get('resultsOutputPath', '/gitdiff_shared');
