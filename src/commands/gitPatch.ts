@@ -177,7 +177,8 @@ export async function exportGitPatch(outputDir: string): Promise<string> {
         });
 
         log.detail('exitCode', String(pushResult.exitCode));
-        if (pushResult.stderr) { log.detail('stderr', pushResult.stderr.trim()); }
+        const maskedStderr = githubToken ? pushResult.stderr.split(githubToken).join('***') : pushResult.stderr;
+        if (maskedStderr) { log.detail('stderr', maskedStderr.trim()); }
         if (pushResult.exitCode !== 0) {
             // push 失败记录警告但继续生成 patch
             vscode.window.showWarningMessage(

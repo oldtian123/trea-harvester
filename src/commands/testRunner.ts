@@ -23,6 +23,19 @@ let webviewRef: vscode.Webview | null = null;
 /** 当前 AI 上下文 */
 let currentAiContext: string = '';
 
+/**
+ * 敏感信息脱敏：替换掉各种输出里的 Github Token
+ */
+function sanitizeText(text: string): string {
+    if (!text) return text;
+    const configToken = vscode.workspace.getConfiguration('traeHarvester').get<string>('githubToken');
+    const githubToken = configToken || process.env.GITHUB_TOKEN;
+    if (githubToken && githubToken.trim() !== '') {
+        return text.split(githubToken).join('***');
+    }
+    return text;
+}
+
 function getResultFileName(): string {
     let branchName = 'test';
     try {
@@ -271,10 +284,10 @@ async function executeStep(step: TestStep, cwd: string, timeoutMs: number): Prom
         const result = await runShellCommand(step.command, effectiveCwd, effectiveTimeout);
 
         const durationMs = Date.now() - startTime;
-        const consoleOutput = [
+        const consoleOutput = sanitizeText([
             result.stdout,
             result.stderr ? `\n[STDERR]\n${result.stderr}` : '',
-        ].join('');
+        ].join(''));
 
         const stepResult: StepResult = {
             step_number: step.step_number,
