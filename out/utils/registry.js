@@ -129,8 +129,11 @@ function updateRegistryEntry(entry) {
                 process.kill(e.pid, 0);
             }
             catch (err) {
-                // Process does not exist
-                delete registry[key];
+                // Only delete if the process definitely does not exist (ESRCH)
+                // If it throws EPERM (no permission), assume it's still alive.
+                if (err.code === 'ESRCH') {
+                    delete registry[key];
+                }
             }
         }
     }
