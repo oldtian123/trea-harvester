@@ -22,6 +22,22 @@ interface GitHubRelease {
 }
 
 /**
+ * 从 GitHub 的 tag_name 或 release.name 中提取 X.Y.Z 格式的版本号
+ */
+function extractVersion(tagName: string, releaseName: string): string {
+    const regex = /\d+\.\d+\.\d+/;
+    let match = tagName.match(regex);
+    if (match) {
+        return match[0];
+    }
+    match = releaseName.match(regex);
+    if (match) {
+        return match[0];
+    }
+    return tagName.replace(/^v/, '');
+}
+
+/**
  * 检查并执行自动更新
  * @param context 扩展上下文
  * @param isManual 是否手动触发（影响提示框）
@@ -47,7 +63,7 @@ export async function checkForUpdates(context: vscode.ExtensionContext, isManual
             throw new Error('没有找到任何可用的发布版本');
         }
 
-        const remoteVersion = releaseData.tag_name.replace(/^v/, ''); // 去掉 v 前缀
+        const remoteVersion = extractVersion(releaseData.tag_name, releaseData.name || '');
         log.info('AutoUpdater', `线上最新版本: ${remoteVersion}`);
 
         // 对比版本号
