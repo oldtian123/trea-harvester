@@ -221,7 +221,6 @@ function setAiContext(text) {
 function syncPlanToWebview() {
     if (!webviewRef)
         return;
-    const { isMcpServerRunning } = require('../mcp/mcpServer');
     webviewRef.postMessage({
         command: 'loadSteps',
         steps: currentPlan?.steps || [],

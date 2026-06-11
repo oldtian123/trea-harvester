@@ -176,7 +176,6 @@ export function setAiContext(text: string): void {
  */
 export function syncPlanToWebview(): void {
     if (!webviewRef) return;
-    const { isMcpServerRunning } = require('../mcp/mcpServer');
     webviewRef.postMessage({
         command: 'loadSteps',
         steps: currentPlan?.steps || [],
