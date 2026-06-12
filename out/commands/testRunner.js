@@ -137,7 +137,7 @@ function updatePlanIdentifiers(repoId, branch, modelId, promptId) {
             status = 'RUNNING';
         }
     }
-    (0, windowServer_1.pushSessionUpdate)({ status, model_id: modelId, prompt_id: promptId });
+    (0, windowServer_1.pushSessionUpdate)({ status, repo_id: repoId, branch: branch, model_id: modelId, prompt_id: promptId });
     // Automatically snapshot history if completed
     if (status === 'COMPLETED') {
         saveHistorySnapshot();
@@ -530,8 +530,8 @@ async function runSingleStep(stepNumber, outputDir) {
     const testResult = buildTestResult(allResults, currentPlan.steps.length);
     const outputPath = path.join(outputDir, getResultFileName());
     await (0, fileUtils_1.writeJson)(outputPath, testResult);
-    // Update registry status by recalculating
-    updatePlanIdentifiers(currentPlan.model_id || '', currentPlan.prompt_id || '');
+    // Update registry status by recalculating (注意参数顺序: repoId, branch, modelId, promptId)
+    updatePlanIdentifiers(currentPlan.repo_id, undefined, currentPlan.model_id, currentPlan.prompt_id);
 }
 /**
  * 通过明确的步骤号执行（供 Webview 界面直接调用）。

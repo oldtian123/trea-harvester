@@ -84,7 +84,7 @@ export function updatePlanIdentifiers(repoId?: string, branch?: string, modelId?
         }
     }
 
-    pushSessionUpdate({ status, model_id: modelId, prompt_id: promptId });
+    pushSessionUpdate({ status, repo_id: repoId, branch: branch, model_id: modelId, prompt_id: promptId });
 
     // Automatically snapshot history if completed
     if (status === 'COMPLETED') {
@@ -538,8 +538,8 @@ async function runSingleStep(stepNumber: number, outputDir: string): Promise<voi
     const outputPath = path.join(outputDir, getResultFileName());
     await writeJson(outputPath, testResult);
     
-    // Update registry status by recalculating
-    updatePlanIdentifiers(currentPlan.model_id || '', currentPlan.prompt_id || '');
+    // Update registry status by recalculating (注意参数顺序: repoId, branch, modelId, promptId)
+    updatePlanIdentifiers(currentPlan.repo_id, undefined, currentPlan.model_id, currentPlan.prompt_id);
 }
 
 /**

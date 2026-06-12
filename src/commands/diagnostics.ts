@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { getLogger } from '../utils/logger';
+import { resolveOutputPath } from '../utils/pathResolver';
 
 export function registerDiagnosticsCommands(context: vscode.ExtensionContext): vscode.Disposable[] {
     const showLogsCmd = vscode.commands.registerCommand('trae-harvester.showLogs', () => {
@@ -20,7 +21,8 @@ export function registerDiagnosticsCommands(context: vscode.ExtensionContext): v
             log.info('Workspace', `当前工作区: ${workspaceFolder || '无'}`);
 
             const config = vscode.workspace.getConfiguration('traeHarvester');
-            log.info('Config', `outputPath: ${config.get('outputPath')}`);
+            log.info('Config', `patch 输出目录: ${resolveOutputPath('patch')}`);
+            log.info('Config', `results 输出目录: ${resolveOutputPath('results')}`);
             log.info('Config', `commandTimeout: ${config.get('commandTimeout')}ms`);
 
             // Check git installation
@@ -47,9 +49,8 @@ export function registerDiagnosticsCommands(context: vscode.ExtensionContext): v
     const exportLogsCmd = vscode.commands.registerCommand('trae-harvester.exportLogs', async () => {
         const log = getLogger();
         try {
-            const config = vscode.workspace.getConfiguration('traeHarvester');
-            const outputPath = config.get<string>('outputPath', '/gitdiff_shared');
-            
+            const outputPath = resolveOutputPath('results');
+
             if (!fs.existsSync(outputPath)) {
                 fs.mkdirSync(outputPath, { recursive: true });
             }
