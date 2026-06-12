@@ -40,7 +40,7 @@ const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const logger_1 = require("./logger");
-const GITHUB_REPO = 'oldtian123/trae-harvester';
+const GITHUB_REPO = 'oldtian123/trea-harvester';
 const GITHUB_API_BASE = 'https://api.github.com';
 const RELEASES_URL = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/releases`;
 /**

@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { getLogger } from './logger';
 
-const GITHUB_REPO = 'oldtian123/trae-harvester';
+const GITHUB_REPO = 'oldtian123/trea-harvester';
 const GITHUB_API_BASE = 'https://api.github.com';
 const RELEASES_URL = `${GITHUB_API_BASE}/repos/${GITHUB_REPO}/releases`;
 

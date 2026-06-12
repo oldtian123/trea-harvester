@@ -55,6 +55,11 @@ function forwardToHub(hubInfo: HubInfo, message: string): Promise<string> {
                     reject(new Error('Hub auth failed (401). The Hub may have restarted. Try restarting this bridge.'));
                     return;
                 }
+                // 202 = 通知类消息无响应体，返回空串表示「不需要回写 stdout」
+                if (res.statusCode === 202) {
+                    resolve('');
+                    return;
+                }
                 resolve(data);
             });
         });
@@ -86,7 +91,10 @@ async function main() {
         if (!line.trim()) continue;
         try {
             const response = await forwardToHub(hubInfo, line);
-            process.stdout.write(response + '\n');
+            // 空响应（通知类消息）不回写 stdout，避免污染 MCP 协议流
+            if (response) {
+                process.stdout.write(response + '\n');
+            }
         } catch (err: any) {
             log(`Forward error: ${err?.message}`);
             const errorResponse = {

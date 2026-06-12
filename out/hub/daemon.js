@@ -93,7 +93,7 @@ class HubRegistry {
                     if (!this.windows.has(sessionId)) {
                         log(`✅ Discovered new window: ${sessionId} (${session.workspace})`);
                     }
-                    this.windows.set(sessionId, { session, lastSeen: now, port });
+                    this.windows.set(sessionId, { session, lastSeen: now, port, token: data.token || '' });
                 }
             }
             catch {
@@ -125,9 +125,13 @@ class HubRegistry {
             throw new Error(`Window ${sessionId} not found`);
         }
         try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (entry.token) {
+                headers['Authorization'] = `Bearer ${entry.token}`;
+            }
             const res = await fetch(`http://127.0.0.1:${entry.port}/execute_tool`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ tool, args }),
                 signal: AbortSignal.timeout(120000), // 2 分钟超时
             });
@@ -163,14 +167,27 @@ class StatelessHttpTransport {
     }
     handleHttpRequest(reqMessage) {
         return new Promise((resolve) => {
-            if ('id' in reqMessage && reqMessage.id !== undefined) {
+            // JSON-RPC 通知（无 id）不会产生响应，必须立即 resolve，
+            // 否则 POST 会一直挂起到 socket 超时，并串行阻塞 bridge 的后续请求。
+            const hasId = 'id' in reqMessage && reqMessage.id !== undefined && reqMessage.id !== null;
+            if (hasId) {
                 this.pending.set(reqMessage.id, resolve);
             }
             if (this.onmessage) {
                 this.onmessage(reqMessage);
             }
             else {
-                resolve({ jsonrpc: '2.0', id: reqMessage.id, error: { code: -32000, message: 'Transport not ready' } });
+                if (hasId) {
+                    resolve({ jsonrpc: '2.0', id: reqMessage.id, error: { code: -32000, message: 'Transport not ready' } });
+                }
+                else {
+                    resolve(null);
+                }
+                return;
+            }
+            // 通知已交给 onmessage 处理，但没有响应可回，立即结束
+            if (!hasId) {
+                resolve(null);
             }
         });
     }
@@ -303,7 +320,13 @@ app.post(protocol_1.MCP_PATH, async (req, res) => {
         try {
             const message = JSON.parse(body);
             const response = await statelessTransport.handleHttpRequest(message);
-            res.json(response);
+            if (response === null) {
+                // 通知类消息无响应体
+                res.status(202).end();
+            }
+            else {
+                res.json(response);
+            }
         }
         catch {
             res.status(400).send('Invalid JSON');

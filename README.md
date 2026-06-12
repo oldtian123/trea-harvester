@@ -4,7 +4,7 @@
 
 一个专为 AI Agent 评测设计的 VS Code 扩展，通过 MCP (Model Context Protocol) 让大模型直接控制测试执行、收集证据并完成评分。完美适配 **"AI 填表 → 人工监考 → AI 收卷评分"** 的评估工作流。
 
-[![Version](https://img.shields.io/badge/version-0.5.2-blue.svg)](https://github.com/oldtian123/trae-harvester/releases)
+[![Version](https://img.shields.io/badge/version-0.5.2-blue.svg)](https://github.com/oldtian123/trea-harvester/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -33,14 +33,14 @@
 ## 📦 安装
 
 ### 方式 1: 从 Release 安装（推荐）
-1. 前往 [Releases](https://github.com/oldtian123/trae-harvester/releases) 页面
+1. 前往 [Releases](https://github.com/oldtian123/trea-harvester/releases) 页面
 2. 下载最新的 `.vsix` 文件
 3. 在 VS Code 中：`Extensions: Install from VSIX...`
 4. 选择下载的文件完成安装
 
 ### 方式 2: 手动编译
 ```bash
-git clone https://github.com/oldtian123/trae-harvester.git
+git clone https://github.com/oldtian123/trea-harvester.git
 cd trae-harvester
 npm install
 npm run compile
@@ -333,7 +333,7 @@ npm run compile
 3. Hub 日志是否有错误信息
 
 ### Q: 如何更新到最新版本？
-**A**: 点击面板中的「检查更新」按钮，或访问 [Releases](https://github.com/oldtian123/trae-harvester/releases) 手动下载。
+**A**: 点击面板中的「检查更新」按钮，或访问 [Releases](https://github.com/oldtian123/trea-harvester/releases) 手动下载。
 
 ---
 
@@ -365,7 +365,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 📮 联系方式
 
-- **GitHub Issues**: [https://github.com/oldtian123/trae-harvester/issues](https://github.com/oldtian123/trae-harvester/issues)
+- **GitHub Issues**: [https://github.com/oldtian123/trea-harvester/issues](https://github.com/oldtian123/trea-harvester/issues)
 - **作者**: oldtian123
 
 ---

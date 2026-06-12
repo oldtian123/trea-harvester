@@ -52,11 +52,14 @@ exports.isWindowServerRunning = isWindowServerRunning;
 exports.getWindowServerPort = getWindowServerPort;
 exports.pushSessionUpdate = pushSessionUpdate;
 const vscode = __importStar(require("vscode"));
+const crypto = __importStar(require("crypto"));
 const express_1 = __importDefault(require("express"));
 const toolHandlers_1 = require("./toolHandlers");
 const logger_1 = require("../utils/logger");
 let server = null;
 let myPort = null;
+/** 窗口鉴权令牌：仅通过 /ping 暴露，/execute_tool 校验。 */
+let authToken = '';
 let currentStatus = 'IDLE';
 let currentIdentifiers = {
     repo_id: undefined,
@@ -80,10 +83,12 @@ async function startWindowServer(context) {
     }
     const app = (0, express_1.default)();
     app.use(express_1.default.json());
+    // 每次启动生成新的鉴权令牌
+    authToken = crypto.randomBytes(32).toString('hex');
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
     const config = vscode.workspace.getConfiguration('traeHarvester');
     const allowExecution = config.get('mcpAllowExecution', true);
-    // ---- Hub 扫描端点：返回窗口基本信息 ----
+    // ---- Hub 扫描端点：返回窗口基本信息（含鉴权令牌，仅本地可读响应体） ----
     app.get('/ping', (_req, res) => {
         res.json({
             ok: true,
@@ -97,10 +102,17 @@ async function startWindowServer(context) {
             prompt_id: currentIdentifiers.prompt_id,
             allowExecution,
             remoteName: vscode.env.remoteName || null,
+            token: authToken,
         });
     });
     // ---- Hub 反向调用工具执行 ----
     app.post('/execute_tool', async (req, res) => {
+        // 鉴权：必须携带从 /ping 获取的 Bearer token
+        const authHeader = req.headers['authorization'];
+        if (authHeader !== `Bearer ${authToken}`) {
+            res.status(401).json({ error: 'Unauthorized. Missing or invalid Bearer token.' });
+            return;
+        }
         const { tool, args } = req.body;
         if (!tool) {
             res.status(400).json({ error: 'Missing tool parameter' });
@@ -116,21 +128,8 @@ async function startWindowServer(context) {
             res.status(500).json({ error: err?.message || String(err) });
         }
     });
-    // ---- 标识/状态更新端点（供 testRunner 调用） ----
-    app.post('/update_session', (req, res) => {
-        const { status, repo_id, branch, model_id, prompt_id } = req.body;
-        if (status)
-            currentStatus = status;
-        if (repo_id !== undefined)
-            currentIdentifiers.repo_id = repo_id;
-        if (branch !== undefined)
-            currentIdentifiers.branch = branch;
-        if (model_id !== undefined)
-            currentIdentifiers.model_id = model_id;
-        if (prompt_id !== undefined)
-            currentIdentifiers.prompt_id = prompt_id;
-        res.json({ ok: true });
-    });
+    // 注：标识/状态更新由同进程的 pushSessionUpdate() 直接调用（内存更新），
+    // 不再暴露 HTTP /update_session 端点，减少攻击面。
     // ---- 确定性端口分配（基于 PID，避免竞态） ----
     const isRemote = !!vscode.env.remoteName;
     const host = isRemote ? '0.0.0.0' : '127.0.0.1';
@@ -189,6 +188,7 @@ function stopWindowServer() {
         }
         server = null;
         myPort = null;
+        authToken = '';
         log('Window server stopped');
     }
 }

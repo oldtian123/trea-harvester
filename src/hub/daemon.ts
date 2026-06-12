@@ -35,6 +35,8 @@ interface WindowEntry {
     session: WindowSession;
     lastSeen: number;
     port: number;
+    /** 窗口的鉴权令牌（从 /ping 获取，调用 /execute_tool 时回传） */
+    token: string;
 }
 
 class HubRegistry {
@@ -76,7 +78,7 @@ class HubRegistry {
                         log(`✅ Discovered new window: ${sessionId} (${session.workspace})`);
                     }
 
-                    this.windows.set(sessionId, { session, lastSeen: now, port });
+                    this.windows.set(sessionId, { session, lastSeen: now, port, token: data.token || '' });
                 }
             } catch {
                 // 端口无响应，跳过
@@ -113,9 +115,13 @@ class HubRegistry {
         }
 
         try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (entry.token) {
+                headers['Authorization'] = `Bearer ${entry.token}`;
+            }
             const res = await fetch(`http://127.0.0.1:${entry.port}/execute_tool`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ tool, args }),
                 signal: AbortSignal.timeout(120000), // 2 分钟超时
             });
@@ -156,15 +162,30 @@ class StatelessHttpTransport implements Transport {
         }
     }
 
-    public handleHttpRequest(reqMessage: JSONRPCMessage): Promise<JSONRPCMessage> {
+    public handleHttpRequest(reqMessage: JSONRPCMessage): Promise<JSONRPCMessage | null> {
         return new Promise((resolve) => {
-            if ('id' in reqMessage && reqMessage.id !== undefined) {
-                this.pending.set(reqMessage.id, resolve);
+            // JSON-RPC 通知（无 id）不会产生响应，必须立即 resolve，
+            // 否则 POST 会一直挂起到 socket 超时，并串行阻塞 bridge 的后续请求。
+            const hasId = 'id' in reqMessage && reqMessage.id !== undefined && reqMessage.id !== null;
+
+            if (hasId) {
+                this.pending.set(reqMessage.id!, resolve);
             }
+
             if (this.onmessage) {
                 this.onmessage(reqMessage);
             } else {
-                resolve({ jsonrpc: '2.0', id: (reqMessage as any).id, error: { code: -32000, message: 'Transport not ready' } } as JSONRPCMessage);
+                if (hasId) {
+                    resolve({ jsonrpc: '2.0', id: (reqMessage as any).id, error: { code: -32000, message: 'Transport not ready' } } as JSONRPCMessage);
+                } else {
+                    resolve(null);
+                }
+                return;
+            }
+
+            // 通知已交给 onmessage 处理，但没有响应可回，立即结束
+            if (!hasId) {
+                resolve(null);
             }
         });
     }
@@ -307,7 +328,12 @@ app.post(MCP_PATH, async (req, res) => {
         try {
             const message = JSON.parse(body);
             const response = await statelessTransport.handleHttpRequest(message);
-            res.json(response);
+            if (response === null) {
+                // 通知类消息无响应体
+                res.status(202).end();
+            } else {
+                res.json(response);
+            }
         } catch {
             res.status(400).send('Invalid JSON');
         }

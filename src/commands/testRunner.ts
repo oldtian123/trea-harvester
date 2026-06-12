@@ -55,7 +55,48 @@ function getResultFileName(): string {
 }
 
 /**
- * 更新测试计划的模型和Prompt标识
+ * 根据当前 stepResults 计算整体会话状态。
+ */
+function computeSessionStatus(): SessionStatus {
+    if (!currentPlan || currentPlan.steps.length === 0) {
+        return 'IDLE';
+    }
+    const hasPending = currentPlan.steps.some(s => {
+        const r = stepResults.get(s.step_number);
+        return !r || r.status === 'PENDING';
+    });
+    const hasCompleted = currentPlan.steps.some(s => {
+        const r = stepResults.get(s.step_number);
+        return r && ['PASS', 'FAIL', 'ERROR', 'TIMEOUT', 'SKIP'].includes(r.status);
+    });
+    if (!hasPending && hasCompleted) {
+        return 'COMPLETED';
+    }
+    return 'RUNNING';
+}
+
+/**
+ * 重算会话状态并连同当前标识一起推送到 Hub。
+ * 供"只想刷新状态"的调用方使用（单步执行、重置等），不改动任何标识。
+ * COMPLETED 时自动落历史快照。
+ */
+function recomputeAndPushStatus(): void {
+    if (!currentPlan) return;
+    const status = computeSessionStatus();
+    pushSessionUpdate({
+        status,
+        repo_id: currentPlan.repo_id,
+        model_id: currentPlan.model_id,
+        prompt_id: currentPlan.prompt_id,
+    });
+    if (status === 'COMPLETED') {
+        saveHistorySnapshot();
+    }
+}
+
+/**
+ * 更新测试计划的仓库/模型/Prompt 标识（由前端面板下拉变更触发），
+ * 随后重算状态并推送到 Hub。
  */
 export function updatePlanIdentifiers(repoId?: string, branch?: string, modelId?: string, promptId?: string): void {
     if (!currentPlan) {
@@ -66,27 +107,9 @@ export function updatePlanIdentifiers(repoId?: string, branch?: string, modelId?
         if (promptId !== undefined) currentPlan.prompt_id = promptId;
     }
 
-    // Check current overall status based on stepResults
-    let status: SessionStatus = 'IDLE';
-    if (currentPlan.steps.length > 0) {
-        const hasPending = currentPlan.steps.some(s => {
-            const r = stepResults.get(s.step_number);
-            return !r || r.status === 'PENDING';
-        });
-        const hasCompleted = currentPlan.steps.some(s => {
-            const r = stepResults.get(s.step_number);
-            return r && ['PASS', 'FAIL', 'ERROR', 'TIMEOUT', 'SKIP'].includes(r.status);
-        });
-        if (!hasPending && hasCompleted) {
-            status = 'COMPLETED';
-        } else if (hasCompleted || currentPlan.steps.length > 0) {
-            status = 'RUNNING';
-        }
-    }
-
+    const status = computeSessionStatus();
     pushSessionUpdate({ status, repo_id: repoId, branch: branch, model_id: modelId, prompt_id: promptId });
 
-    // Automatically snapshot history if completed
     if (status === 'COMPLETED') {
         saveHistorySnapshot();
     }
@@ -485,7 +508,7 @@ async function runAllSteps(outputDir: string): Promise<void> {
     });
     
     // Update registry status to COMPLETED
-    pushSessionUpdate({ status: 'COMPLETED', model_id: currentPlan.model_id, prompt_id: currentPlan.prompt_id });
+    pushSessionUpdate({ status: 'COMPLETED', repo_id: currentPlan.repo_id, model_id: currentPlan.model_id, prompt_id: currentPlan.prompt_id });
     saveHistorySnapshot();
 
     const icon = testResult.final_status === 'PASS' ? '✅' : testResult.final_status === 'PARTIAL' ? '⚠️' : '❌';
@@ -538,8 +561,8 @@ async function runSingleStep(stepNumber: number, outputDir: string): Promise<voi
     const outputPath = path.join(outputDir, getResultFileName());
     await writeJson(outputPath, testResult);
     
-    // Update registry status by recalculating (注意参数顺序: repoId, branch, modelId, promptId)
-    updatePlanIdentifiers(currentPlan.repo_id, undefined, currentPlan.model_id, currentPlan.prompt_id);
+    // 单步执行后只刷新状态，不改动标识
+    recomputeAndPushStatus();
 }
 
 /**
@@ -594,7 +617,7 @@ export async function resetStepResults(): Promise<void> {
     stepResults.clear();
     
     // Update registry status to RUNNING
-    pushSessionUpdate({ status: 'RUNNING', model_id: currentPlan.model_id, prompt_id: currentPlan.prompt_id });
+    pushSessionUpdate({ status: 'RUNNING', repo_id: currentPlan.repo_id, model_id: currentPlan.model_id, prompt_id: currentPlan.prompt_id });
 
     // 生成 PENDING 状态的新 test_result.json
     const outputPath = resolveOutputPath('results');
